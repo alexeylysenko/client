@@ -70,28 +70,6 @@ namespace OCC {
 
 Q_LOGGING_CATEGORY(lcApplication, "gui.application", QtInfoMsg)
 
-namespace {
-
-    const QString optionsC()
-    {
-        return QStringLiteral(
-            "Options:\n"
-            "  -h --help            : show this help screen.\n"
-            "  -s --showsettings    : show the settings dialog while starting.\n"
-            "  -q --quit            : quit the running instance\n"
-            "  --logfile <filename> : write log output to file <filename>.\n"
-            "  --logfile -          : write log output to stdout.\n"
-            "  --logdir <name>      : write each sync log output in a new file\n"
-            "                         in folder <name>.\n"
-            "  --logexpire <hours>  : removes logs older than <hours> hours.\n"
-            "                         (to be used with --logdir)\n"
-            "  --logflush           : flush the log file after every write.\n"
-            "  --logdebug           : also output debug-level messages in the log.\n"
-            "  --language <locale>  : override UI language\n"
-            "  --confdir <dirname>  : Use the given configuration folder.");
-    }
-}
-
 // ----------------------------------------------------------------------------------
 
 bool Application::configVersionMigration()
@@ -168,8 +146,6 @@ Application::Application(int &argc, char **argv)
     : SharedTools::QtSingleApplication(Theme::instance()->appName(), argc, argv)
     , _gui(nullptr)
     , _theme(Theme::instance())
-    , _helpOnly(false)
-    , _versionOnly(false)
     , _showLogWindow(false)
     , _logExpire(0)
     , _logFlush(false)
@@ -273,10 +249,6 @@ Application::Application(int &argc, char **argv)
         qCInfo(lcApplication) << "VFS windows plugin is available";
     if (isVfsPluginAvailable(Vfs::WithSuffix))
         qCInfo(lcApplication) << "VFS suffix plugin is available";
-
-    //no need to waste time;
-    if (_helpOnly || _versionOnly)
-        return;
 
     if (_quitInstance) {
         QTimer::singleShot(0, qApp, &QApplication::quit);
@@ -562,75 +534,6 @@ void Application::slotParseMessage(const QString &msg, QObject *)
     }
 }
 
-void Application::parseOptions(const QStringList &options)
-{
-    QStringListIterator it(options);
-    // skip file name;
-    if (it.hasNext())
-        it.next();
-
-    //parse options; if help or bad option exit
-    while (it.hasNext()) {
-        QString option = it.next();
-        if (option == QLatin1String("--help") || option == QLatin1String("-h")) {
-            setHelp();
-            break;
-        } else if (option == QLatin1String("--showsettings") || option == QLatin1String("-s")) {
-            _showSettings = true;
-        } else if (option == QLatin1String("--quit") || option == QLatin1String("-q")) {
-            _quitInstance = true;
-        } else if (option == QLatin1String("--logwindow") || option == QLatin1String("-l")) {
-            _showLogWindow = true;
-        } else if (option == QLatin1String("--logfile")) {
-            if (it.hasNext() && !it.peekNext().startsWith(QLatin1String("--"))) {
-                _logFile = it.next();
-            } else {
-                showHint("Log file not specified");
-            }
-        } else if (option == QLatin1String("--logdir")) {
-            if (it.hasNext() && !it.peekNext().startsWith(QLatin1String("--"))) {
-                _logDir = it.next();
-            } else {
-                showHint("Log dir not specified");
-            }
-        } else if (option == QLatin1String("--logexpire")) {
-            if (it.hasNext() && !it.peekNext().startsWith(QLatin1String("--"))) {
-                _logExpire = std::chrono::hours(it.next().toInt());
-            } else {
-                showHint("Log expiration not specified");
-            }
-        } else if (option == QLatin1String("--logflush")) {
-            _logFlush = true;
-        } else if (option == QLatin1String("--logdebug")) {
-            _logDebug = true;
-        } else if (option == QLatin1String("--confdir")) {
-            if (it.hasNext() && !it.peekNext().startsWith(QLatin1String("--"))) {
-                QString confDir = it.next();
-                if (!ConfigFile::setConfDir(confDir)) {
-                    showHint("Invalid path passed to --confdir");
-                }
-            } else {
-                showHint("Path for confdir not specified");
-            }
-        } else if (option == QLatin1String("--debug")) {
-            _logDebug = true;
-            _debugMode = true;
-        } else if (option == QLatin1String("--version")) {
-            _versionOnly = true;
-        } else if (option == QLatin1String("--language")) {
-            if (it.hasNext() && !it.peekNext().startsWith(QLatin1String("--"))) {
-                _userEnforcedLanguage = it.next();
-            } else {
-                showHint("--language expects a parameter");
-            }
-        } else if (option.endsWith(QStringLiteral(APPLICATION_DOTVIRTUALFILE_SUFFIX))) {
-            // virtual file, open it after the Folder were created (if the app is not terminated)
-            QTimer::singleShot(0, this, [this, option] { openVirtualFile(option); });
-        } else {
-            showHint(QStringLiteral("Unrecognized option '%1'").arg(option));
-        }
-    }
-}
 
 // Helpers for displaying messages. Note that there is probably no console on Windows.
 static void displayHelpText(const QString &t, std::ostream &stream = std::cout)
@@ -646,31 +549,106 @@ static void displayHelpText(const QString &t, std::ostream &stream = std::cout)
 #endif
 }
 
-void Application::showHelp()
+void Application::parseOptions(const QStringList &arguments)
 {
-    setHelp();
-    QString helpText;
-    QTextStream stream(&helpText);
-    stream << _theme->appName()
-           << QLatin1String(" version ")
-           << _theme->version() << endl;
+    QCommandLineParser parser;
 
-    stream << QLatin1String("File synchronisation desktop utility.") << endl
-           << endl
-           << optionsC();
+    QString descriptionText;
+    QTextStream descriptionTextStream(&descriptionText);
+
+    descriptionTextStream << _theme->appName() << QStringLiteral(" version ") << _theme->version() << endl;
+    descriptionTextStream << QStringLiteral("File synchronization desktop utility.");
 
     if (_theme->appName() == QLatin1String("ownCloud")) {
-        stream << endl
-               << endl
-               << "For more information, see http://www.owncloud.org";
+        descriptionTextStream << endl
+                              << endl
+                              << "For more information, see http://www.owncloud.org";
     }
 
-    displayHelpText(helpText);
-}
+    parser.setApplicationDescription(descriptionText);
 
-void Application::showVersion()
-{
-    displayHelpText(Theme::instance()->versionSwitchOutput());
+    auto helpOption = parser.addHelpOption();
+    auto versionOption = parser.addVersionOption();
+
+    // this little snippet saves a few lines below
+    auto addOption = [&parser](const QCommandLineOption &option) {
+        parser.addOption(option);
+        return option;
+    };
+
+    auto showSettingsOption = addOption({ { "s", "showsettings" }, "Show the settings dialog while starting." });
+    auto quitInstanceOption = addOption({ { "q", "quit" }, "Quit the running instance." });
+    auto logFileOption = addOption({ "logfile", "Write log to file (use - to write to stdout).", "filename" });
+    auto logDirOption = addOption({ "logdir", "Write each sync log output in a new file in folder.", "name" });
+    auto logExpireOption = addOption({ "logexpire", "Remove logs older than <hours> hours (to be used with --logdir).", "hours" });
+    auto logFlushOption = addOption({ "logflush", "Flush the log file after every write." });
+    auto logDebugOption = addOption({ "logdebug", "Output debug-level messages in the log." });
+    auto logWindowOption = addOption({ "logwindow", "//TODO//" });
+    auto languageOption = addOption({ "language", "Override UI language.", "language" });
+    auto confDirOption = addOption({ "confdir", "Use the given configuration folder.", "dirname" });
+    auto debugOption = addOption({ "debug", "Enable debug mode." });
+
+    // virtual file system parameters (optional)
+    parser.addPositionalArgument("vfs file", "Virtual file system file to be opened (optional).", { "[<vfs file>]" });
+
+    if (!parser.parse(arguments)) {
+        showHint(parser.errorText());
+    }
+
+    if (parser.isSet(helpOption)) {
+        showHint(parser.helpText());
+    }
+
+    if (parser.isSet(versionOption)) {
+        displayHelpText(_theme->versionSwitchOutput());
+        ::exit(0);
+    }
+
+    // TODO: rename this option (see #8234 for more information)
+    if (parser.isSet(showSettingsOption)) {
+        _showSettings = true;
+    }
+    if (parser.isSet(quitInstanceOption)) {
+        _quitInstance = true;
+    }
+    if (parser.isSet(logWindowOption)) {
+        _showLogWindow = true;
+    }
+    if (parser.isSet(logFileOption)) {
+        _logFile = parser.value(logFileOption);
+    }
+    if (parser.isSet(logDirOption)) {
+        _logDir = parser.value(logDirOption);
+    }
+    if (parser.isSet(logExpireOption)) {
+        _logExpire = std::chrono::hours(parser.value(logExpireOption).toInt());
+    }
+    if (parser.isSet(logFlushOption)) {
+        _logFlush = true;
+    }
+    if (parser.isSet(logDebugOption)) {
+        _logDebug = true;
+    }
+    if (parser.isSet(confDirOption)) {
+        const auto confDir = parser.value(confDirOption);
+        if (!ConfigFile::setConfDir(confDir)) {
+            showHint("Invalid path passed to --confdir");
+        }
+    }
+    if (parser.isSet(debugOption)) {
+        _logDebug = true;
+        _debugMode = true;
+    }
+    if (parser.isSet(languageOption)) {
+        _userEnforcedLanguage = parser.value(languageOption);
+    }
+
+    auto positionalArguments = parser.positionalArguments();
+
+    // ignore any positional arguments beyond the first one
+    if (!positionalArguments.empty()) {
+        QTimer::singleShot(0, this, [this, positionalArguments] { openVirtualFile(positionalArguments.front()); });
+    }
 }
 
 void Application::showHint(const QString &errorHint)
@@ -686,11 +664,6 @@ void Application::showHint(const QString &errorHint)
 bool Application::debugMode()
 {
     return _debugMode;
-}
-
-void Application::setHelp()
-{
-    _helpOnly = true;
 }
 
 QString substLang(const QString &lang)
@@ -770,16 +743,6 @@ void Application::setupTranslations()
             break;
         }
     }
-}
-
-bool Application::giveHelp()
-{
-    return _helpOnly;
-}
-
-bool Application::versionOnly()
-{
-    return _versionOnly;
 }
 
 void Application::showSettingsDialog()

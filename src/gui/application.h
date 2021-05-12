@@ -59,12 +59,8 @@ public:
     explicit Application(int &argc, char **argv);
     ~Application() override;
 
-    bool giveHelp();
-    void showHelp();
     void showHint(const QString &errorHint);
     bool debugMode();
-    bool versionOnly(); // only display the version?
-    void showVersion();
 
     void showSettingsDialog();
 
@@ -119,9 +115,6 @@ private:
     QPointer<ownCloudGui> _gui;
 
     Theme *_theme;
-
-    bool _helpOnly;
-    bool _versionOnly;
 
 
 #ifdef Q_OS_LINUX

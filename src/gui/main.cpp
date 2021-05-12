@@ -70,14 +70,6 @@ int main(int argc, char **argv)
 #ifndef Q_OS_WIN
     signal(SIGPIPE, SIG_IGN);
 #endif
-    if (app.giveHelp()) {
-        app.showHelp();
-        return 0;
-    }
-    if (app.versionOnly()) {
-        app.showVersion();
-        return 0;
-    }
 
 // check a environment variable for core dumps
 #ifdef Q_OS_UNIX
