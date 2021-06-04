@@ -30,7 +30,7 @@ class AccountStatus:
         "visible": 1,
     }
 
-    def loginLogoutAction(self, action):
+    def accountAction(self, action):
         squish.sendEvent(
             "QMouseEvent",
             squish.waitForObject(self.ACCOUNT_BUTTON),
@@ -44,15 +44,5 @@ class AccountStatus:
         squish.activateItem(squish.waitForObjectItem(self.ACCOUNT_MENU, action))
 
     def removeUser(self):
-        squish.sendEvent(
-            "QMouseEvent",
-            squish.waitForObject(self.ACCOUNT_BUTTON),
-            squish.QEvent.MouseButtonPress,
-            0,
-            0,
-            squish.Qt.LeftButton,
-            0,
-            0,
-        )
-        squish.activateItem(squish.waitForObjectItem(names.settings_QMenu, "Remove"))
+        self.accountAction("Remove")
         squish.clickButton(squish.waitForObject(self.REMOVE_CONNECTION_BUTTON))
