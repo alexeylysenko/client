@@ -18,7 +18,7 @@ from pageObjects.SharingDialog import SharingDialog
 from pageObjects.SyncWizard import SyncWizard
 from pageObjects.Toolbar import Toolbar
 from pageObjects.Activity import Activity
-
+from pageObjects.AccountStatus import AccountStatus
 
 # the script needs to use the system wide python
 # to switch from the built-in interpreter see https://kb.froglogic.com/squish/howto/using-external-python-interpreter-squish-6-6/
@@ -65,6 +65,16 @@ def hook(context):
         os.remove(confFilePath)
     except:
         pass
+
+
+@Given('the user has added an account with')
+def step(context):
+    clickButton(
+        waitForObject(names.settings_settingsdialog_toolbutton_Add_account_QToolButton)
+    )
+
+    newAccount = AccountConnectionWizard()
+    newAccount.addAccount(context)
 
 
 @When('the user adds the first account with')
@@ -516,16 +526,16 @@ def step(context, resource, role):
 
 @When('the user logs out of the client-UI')
 def step(context):
-    toolbar = Toolbar()
-    toolbar.userLogout()
+    accountStatus = AccountStatus()
+    accountStatus.userLogout()
 
 
 def isUserSignedOut(context, username):
     displayname = getDisplayname(username)
     server = context.userData['localBackendUrl']
-    toolbar = Toolbar()
+    accountStatus = AccountStatus()
     test.compare(
-        str(waitForObjectExists(toolbar.SIGNED_OUT_TEXT_BAR).text),
+        str(waitForObjectExists(accountStatus.SIGNED_OUT_TEXT_BAR).text),
         'Signed out from <a href="'
         + server
         + '">'
@@ -539,10 +549,10 @@ def isUserSignedOut(context, username):
 def isUserSignedIn(context, username):
     displayname = getDisplayname(username)
     server = context.userData['localBackendUrl']
-    toolbar = Toolbar()
+    accountStatus = AccountStatus()
 
     test.compare(
-        str(waitForObjectExists(toolbar.SIGNED_OUT_TEXT_BAR).text),
+        str(waitForObjectExists(accountStatus.SIGNED_OUT_TEXT_BAR).text),
         'Connected '
         + 'to <a href="'
         + server
@@ -568,15 +578,15 @@ def step(context, username):
     # TODO: find some way to dynamically to check if files are synced
     # It might take some time for all files to sync
     snooze(5)
-    toolbar = Toolbar()
-    toolbar.userLogout()
+    accountStatus = AccountStatus()
+    accountStatus.userLogout()
     isUserSignedOut(context, username)
 
 
 @When('user "|any|" logs in to the client-UI')
 def step(context, username):
-    toolbar = Toolbar()
-    toolbar.userLogsIn()
+    accountStatus = AccountStatus()
+    accountStatus.userLogsIn()
     password = getPasswordForUser(username)
     enterUserPassword = EnterPassword()
     enterUserPassword.enterPassword(password)
@@ -588,3 +598,39 @@ def step(context, username):
     # It might take some time for all files to sync and connect to ther server
     snooze(5)
     isUserSignedIn(context, username)
+
+
+@When("the user removes the account")
+def step(context):
+    waitFor(
+        lambda: isFolderSynced(context.userData['clientSyncPath']),
+        context.userData['clientSyncTimeout'] * 1000,
+    )
+    accountStatus = AccountStatus()
+    accountStatus.removeUser()
+
+
+@Then('an account with the displayname |any| and host |any| should not be displayed')
+def step(context, displayname, host):
+    displayname = substituteInLineCodes(context, displayname)
+    host = substituteInLineCodes(context, host)
+    test.compare(
+        str(
+            waitForObjectExists(
+                {
+                    "name": "settingsdialog_toolbutton_" + displayname + "@" + host,
+                    "type": "QToolButton",
+                    "visible": 1,
+                }
+            ).text
+        ),
+        displayname + "\n" + host,
+    )
+
+
+@Then('connection wizard should be visible')
+def step(context):
+    test.compare(
+        str(waitForObjectExists(names.owncloudWizard_label_2_QLabel).text),
+        'Ser&ver Address',
+    )
