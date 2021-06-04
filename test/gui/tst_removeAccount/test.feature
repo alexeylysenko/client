@@ -22,4 +22,4 @@ Feature: remove account
     Given user "Alice" has been created on the server with default attributes and without skeleton files
     And user "Alice" has set up a client with default settings
     When the user removes the account
-	Then connection wizard should be visible
+    Then connection wizard should be visible

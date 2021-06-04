@@ -527,7 +527,7 @@ def step(context, resource, role):
 @When('the user logs out of the client-UI')
 def step(context):
     accountStatus = AccountStatus()
-    accountStatus.userLogout()
+    accountStatus.loginLogoutAction("Log out")
 
 
 def isUserSignedOut(context, username):
@@ -579,14 +579,14 @@ def step(context, username):
     # It might take some time for all files to sync
     snooze(5)
     accountStatus = AccountStatus()
-    accountStatus.userLogout()
+    accountStatus.loginLogoutAction("Log out")
     isUserSignedOut(context, username)
 
 
 @When('user "|any|" logs in to the client-UI')
 def step(context, username):
     accountStatus = AccountStatus()
-    accountStatus.userLogsIn()
+    accountStatus.loginLogoutAction("Log in")
     password = getPasswordForUser(username)
     enterUserPassword = EnterPassword()
     enterUserPassword.enterPassword(password)
