@@ -15,7 +15,7 @@ Feature: remove account
         | password    | AaBb2Cc3Dd4        |
         | localfolder | %client_sync_path% |
     When the user removes the account
-	Then an account should be displayed with the displayname Alice Hansen and host %local_server_hostname%
+    Then an account should be displayed with the displayname Alice Hansen and host %local_server_hostname%
 
 
   Scenario: remove the only account
